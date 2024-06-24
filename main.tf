@@ -72,8 +72,8 @@ module "elb_http" {
   security_groups = [module.lb_security_group[each.key].security_group_id]
   subnets         = module.vpc[each.key].public_subnets
 
-  number_of_instances = length(modules.ec2_instances[each.key].instance_ids)
-  instances           = modules.ec2_instances[each.key].instance_ids
+  number_of_instances = length(aws_instance.app.instance_ids)
+  instances           = aws_instance.app.instance_ids
 
   listener = [{
     instance_port     = "80"
@@ -102,7 +102,8 @@ data "aws_ami" "amazon_linux" {
 }
 
 resource "aws_instance" "app" {
-  count = var.instance_count
+# count = var.instance_count
+  for_each = var.projects
 
   ami           = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
@@ -119,9 +120,6 @@ resource "aws_instance" "app" {
     echo "<html><body><div>Hello, world!</div></body></html>" > /var/www/html/index.html
     EOF
 
-  tags = {
-    Terraform   = "true"
-    Project     = var.project_name
-    Environment = var.environment
-  }
+    project_name = each.key
+    environment  = each.value
 }
