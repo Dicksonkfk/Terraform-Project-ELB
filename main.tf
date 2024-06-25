@@ -72,8 +72,8 @@ module "elb_http" {
   security_groups = [module.lb_security_group[each.key].security_group_id]
   subnets         = module.vpc[each.key].public_subnets
 
-  number_of_instances = length(aws_instance.app.instance_ids)
-  instances           = aws_instance.app.instance_ids
+  number_of_instances = length(module.ec2_instances[each.key].instance_ids)
+  instances           = module.ec2_instances[each.key].instance_ids
 
   listener = [{
     instance_port     = "80"
@@ -91,35 +91,17 @@ module "elb_http" {
   }
 }
 
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
+module "ec2_instances" {
+  source = "../modules/ec2-instance/main.tf"
+  depends_on = [module.vpc]
 
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
+  for_each   = var.projects  
 
-resource "aws_instance" "app" {
-# count = var.instance_count
-  for_each = var.projects
+  instance_count           = each.value.instances_per_subnet * length(module.vpc[each.key].vpc.private_subnets)
+  instance_type            = each.value.instance_type
+  subnet_id                = module.vpc[each.key].private_subnets[*]
+  vpc_security_group_ids   = [module.app_security_group[each.key].security_group_id]
 
-  ami           = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-
-  subnet_id              = var.subnet_ids[count.index % length(var.subnet_ids)]
-  vpc_security_group_ids = var.security_group_ids
-
-  user_data = <<-EOF
-    #!/bin/bash
-    sudo yum update -y
-    sudo yum install httpd -y
-    sudo systemctl enable httpd
-    sudo systemctl start httpd
-    echo "<html><body><div>Hello, world!</div></body></html>" > /var/www/html/index.html
-    EOF
-
-    project_name = each.key
-    environment  = each.value
+  project_name             = each.key
+  project_env              = each.value.environment
 }
